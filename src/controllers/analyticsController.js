@@ -1,5 +1,5 @@
 const Event = require('../models/Event');
-const { client: redis } = require('../utils/redisClient');
+const { safeGet, safeSet } = require('../utils/redisClient');
 const mongoose = require('mongoose');
 
 async function collectEvent(req, res, next) {
@@ -32,7 +32,7 @@ async function eventSummary(req, res, next) {
     const { event, startDate, endDate, app_id } = req.query;
     const cacheKey = `evsum:${event || 'all'}:${startDate || '0'}:${endDate || 'now'}:${app_id || 'all'}`;
 
-    const cached = await redis.get(cacheKey);
+    const cached = await safeGet(cacheKey);
     if (cached) return res.json(JSON.parse(cached));
 
     const match = {};
@@ -76,7 +76,7 @@ async function eventSummary(req, res, next) {
     const response = results.length === 0 ? { event, count: 0, uniqueUsers: 0, deviceData: {} }
       : results[0];
 
-    await redis.set(cacheKey, JSON.stringify(response), { EX: 30 });
+    await safeSet(cacheKey, JSON.stringify(response), { EX: 30 });
     res.json(response);
   } catch (err) { next(err); }
 }
@@ -87,7 +87,7 @@ async function userStats(req, res, next) {
     if (!userId) return res.status(400).json({ error: 'userId required' });
 
     const cacheKey = `uStats:${userId}`;
-    const cached = await redis.get(cacheKey);
+    const cached = await safeGet(cacheKey);
     if (cached) return res.json(JSON.parse(cached));
 
     const recentEvents = await Event.find({ userId }).sort({ timestamp: -1 }).limit(20).lean();
@@ -109,7 +109,7 @@ async function userStats(req, res, next) {
       ipAddress: ipSet.size ? Array.from(ipSet)[0] : null
     };
 
-    await redis.set(cacheKey, JSON.stringify(resObj), { EX: 30 });
+    await safeSet(cacheKey, JSON.stringify(resObj), { EX: 30 });
     res.json(resObj);
   } catch (err) { next(err); }
 }
